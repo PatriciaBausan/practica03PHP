@@ -1,0 +1,14 @@
+[
+    {
+        "id": 1,
+        "alias": "Patricia Bausan Gómez",
+        "email": "pbgcole@gmail.com",
+        "password_hash": "$2y$12$yex9ATBM2k3nLYKroUh5Uu6r9U.J9\/ovlmsR1H20rySc.8t2TfPjO"
+    },
+    {
+        "id": 2,
+        "alias": "Patri",
+        "email": "patri@gmail.com",
+        "password_hash": "$2y$12$3bvazqET7F75frr2CHl1I.uaLLPsL58ReyTeFa33MZ8BRpdAFBG2S"
+    }
+]
