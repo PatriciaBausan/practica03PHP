@@ -1,6 +1,5 @@
 <?php
-require_once __DIR__ . '/lib/canciones.php';
-require_once __DIR__ . '/lib/acceso.php';
+require_once __DIR__ . '/lib/sesion.php';
 ?>
 <!DOCTYPE html>
 <html lang="es">

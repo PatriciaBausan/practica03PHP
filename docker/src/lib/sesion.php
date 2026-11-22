@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/canciones.php'; // para e()
+require_once __DIR__ . '/canciones.php'; 
 
 function parametrosCookie(): array
 {
