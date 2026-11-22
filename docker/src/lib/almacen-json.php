@@ -32,7 +32,7 @@ class ErrorDeNegocio extends RuntimeException
 
 function modificarColeccion(string $ruta, callable $cambio): mixed
 {
-    $f = fopen($ruta, 'r+'); // r+ lee y escribe sin vaciar el archivo
+    $f = fopen($ruta, 'r+'); 
     if ($f === false) {
         throw new RuntimeException('No se puede abrir el archivo de datos.');
     }
@@ -70,4 +70,14 @@ function modificarColeccion(string $ruta, callable $cambio): mixed
         flock($f, LOCK_UN);
         fclose($f);
     }
+}
+
+function opcionesCatalogo(): array
+{
+    $lista = leerColeccion(RUTA_CANCIONES);
+    $categorias = array_values(array_unique(array_column($lista, 'category')));
+    $audios = array_values(array_unique(array_column($lista, 'src')));
+    sort($categorias);
+    sort($audios);
+    return ['categorias' => $categorias, 'audios' => $audios];
 }

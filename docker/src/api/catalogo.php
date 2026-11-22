@@ -1,15 +1,10 @@
 <?php
 require_once __DIR__ . '/../lib/respuestas.php';
-require_once __DIR__ . '/../lib/sesion.php';          
-require_once __DIR__ . '/../lib/almacen-json.php';    
+require_once __DIR__ . '/../lib/sesion.php';
+require_once __DIR__ . '/../lib/almacen-json.php';
 
-const CATEGORIAS_PERMITIDAS = ['rumba', 'flamenco', 'pop'];
-const AUDIOS_PERMITIDOS = ['audio/demo-01.mp3'];
-
-
-function validarCancion(array $d): ?string
+function validarCancion(array $d, array $opciones): ?string
 {
-    // Primero los tipos...
     foreach (['title', 'artist', 'category', 'src'] as $campo) {
         if (!isset($d[$campo]) || !is_string($d[$campo])) {
             return "El campo $campo debe ser un texto.";
@@ -26,13 +21,13 @@ function validarCancion(array $d): ?string
     if ($artist === '' || mb_strlen($artist) > 80) {
         return 'El artista es obligatorio y admite hasta 80 caracteres.';
     }
-    if (!in_array($d['category'], CATEGORIAS_PERMITIDAS, true)) {
+    if (!in_array($d['category'], $opciones['categorias'], true)) {
         return 'La categoría no está admitida.';
     }
     if ($d['duration'] < 1 || $d['duration'] > 1800) {
         return 'La duración debe ser un entero entre 1 y 1800 segundos.';
     }
-    if (!in_array($d['src'], AUDIOS_PERMITIDOS, true)) {
+    if (!in_array($d['src'], $opciones['audios'], true)) {
         return 'El audio no pertenece a la lista autorizada.';
     }
     return null;
@@ -87,7 +82,13 @@ if (!is_object($objeto)) {
 $datos = get_object_vars($objeto);
 
 if ($action === 'create') {
-    $error = validarCancion($datos);
+    try {
+        $opciones = opcionesCatalogo();
+    } catch (JsonException | RuntimeException $e) {
+        error_log('API catalogo create: ' . $e->getMessage());
+        responderJson(500, ['ok' => false, 'error' => 'No se pudo leer el catálogo.']);
+    }
+    $error = validarCancion($datos, $opciones);
     if ($error !== null) {
         responderJson(422, ['ok' => false, 'error' => $error]);
     }
@@ -116,4 +117,108 @@ if ($action === 'create') {
     responderJson(201, ['ok' => true, 'data' => array_values($lista)]);
 }
 
-responderJson(400, ['ok' => false, 'error' => 'Acción todavía no disponible.']);
+if ($action === 'update') {
+
+    if (!isset($datos['id']) || !is_int($datos['id']) || $datos['id'] <= 0) {
+        responderJson(422, ['ok' => false, 'error' => 'El ID no es válido.']);
+    }
+
+    $id = $datos['id'];
+
+    try {
+        $opciones = opcionesCatalogo();
+    } catch (JsonException | RuntimeException $e) {
+        error_log('API catalogo update: ' . $e->getMessage());
+        responderJson(500, ['ok' => false, 'error' => 'No se pudo leer el catálogo.']);
+    }
+
+    $error = validarCancion($datos, $opciones);
+
+    if ($error !== null) {
+        responderJson(422, ['ok' => false, 'error' => $error]);
+    }
+
+    try {
+        $lista = modificarColeccion(RUTA_CANCIONES, function (array $canciones) use ($datos, $id) {
+
+            $encontrada = false;
+
+            foreach ($canciones as $posicion => $cancion) {
+
+                if ((int) ($cancion['id'] ?? 0) === $id) {
+
+                    $canciones[$posicion] = [
+                        'id'       => $id,
+                        'title'    => trim($datos['title']),
+                        'artist'   => trim($datos['artist']),
+                        'category' => $datos['category'],
+                        'duration' => $datos['duration'],
+                        'src'      => $datos['src'],
+                    ];
+
+                    $encontrada = true;
+                    break;
+                }
+            }
+
+            if (!$encontrada) {
+                throw new ErrorDeNegocio('La canción ya no existe.');
+            }
+
+            return [$canciones, $canciones];
+        });
+
+    } catch (ErrorDeNegocio $e) {
+        responderJson(404, ['ok' => false, 'error' => $e->getMessage()]);
+
+    } catch (JsonException | RuntimeException $e) {
+        error_log('API catalogo update: ' . $e->getMessage());
+        responderJson(500, ['ok' => false, 'error' => 'No se pudo actualizar el catálogo.']);
+    }
+
+ 
+responderJson(200, ['ok' => true, 'data' => array_values($lista)]);
+}
+
+if ($action === 'delete') {
+
+    if (!isset($datos['id']) || !is_int($datos['id']) || $datos['id'] <= 0) {
+        responderJson(422, ['ok' => false, 'error' => 'El ID no es válido.']);
+    }
+
+    $id = $datos['id'];
+
+    try {
+        $lista = modificarColeccion(RUTA_CANCIONES, function (array $canciones) use ($id) {
+
+            $encontrada = false;
+
+            foreach ($canciones as $posicion => $cancion) {
+
+                if ((int) ($cancion['id'] ?? 0) === $id) {
+
+                    unset($canciones[$posicion]);
+                    $encontrada = true;
+                    break;
+                }
+            }
+
+            if (!$encontrada) {
+                throw new ErrorDeNegocio('La canción ya no existe.');
+            }
+
+            $canciones = array_values($canciones);
+
+            return [$canciones, $canciones];
+        });
+
+    } catch (ErrorDeNegocio $e) {
+        responderJson(404, ['ok' => false, 'error' => $e->getMessage()]);
+
+    } catch (JsonException | RuntimeException $e) {
+        error_log('API catalogo delete: ' . $e->getMessage());
+        responderJson(500, ['ok' => false, 'error' => 'No se pudo eliminar la canción.']);
+    }
+
+    responderJson(200, ['ok' => true, 'data' => array_values($lista)]);
+}
