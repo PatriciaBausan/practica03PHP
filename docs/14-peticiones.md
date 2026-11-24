@@ -1,81 +1,79 @@
-# Bloque 14 · Entender la nueva petición
+# Bloque 14. Entender la nueva petición y acordar las operaciones
 
-## Recorrido de una consulta
+## Objetivo y encargo
 
-```mermaid
-flowchart LR
-    U[Acción del usuario] --> JS[JavaScript en el navegador]
-    JS -->|fetch, petición HTTP| API[PHP: api/catalogo.php]
-    API -->|leerColeccion| LIB[lib/almacen-json.php]
-    LIB -->|lee el mismo archivo| JSON["/var/www/data/canciones.json<br/>docker/data/canciones.json en el host"]
-    JSON --> LIB
-    LIB --> API
-    API -->|respuesta JSON| JS
-    JS -->|actualiza la tabla sin recargar| T[Tabla del catálogo]
-```
+La asociación quiere gestionar canciones sin sustituir el documento completo después de cada acción. Para ello, JavaScript enviará peticiones con `fetch` a una API PHP y recibirá respuestas JSON.
 
-El navegador ejecuta el JavaScript y presenta la tabla. PHP se ejecuta en el
-contenedor y es el único que lee o modifica los datos. El archivo JSON está fuera
-de `src`: el volumen de Compose monta `docker/data` como `/var/www/data`.
-Las dos APIs comparten ese archivo y las funciones de `lib/almacen-json.php`;
-no se debe crear otra copia del catálogo.
+AJAX es el nombre habitual de esta comunicación asíncrona. En esta práctica se intercambia JSON, no XML.
 
-## Contrato de las direcciones
+## Recorrido de una petición
 
-### `api/canciones.php`
+1. El usuario realiza una acción en la página.
+2. JavaScript ejecuta `fetch`.
+3. La API PHP comprueba sesión, método, token y datos.
+4. PHP lee o modifica el archivo JSON privado.
+5. PHP devuelve una respuesta JSON.
+6. JavaScript actualiza la tabla sin recargar el documento.
 
-Es la API que utiliza el reproductor. Con una sesión válida devuelve directamente
-la lista de canciones, conservando el formato que ya consume la home:
+PHP se ejecuta en el contenedor. JavaScript se ejecuta en el navegador. El navegador nunca abre directamente el archivo privado: solicita a PHP una operación permitida.
+
+## Dos endpoints, dos responsabilidades
+
+- `api/canciones.php` continúa devolviendo la lista que necesita el reproductor. No se cambia su formato: la home espera una lista con campos como `songs[i].src`.
+- `api/catalogo.php` será la API de gestión. Devuelve un objeto con `ok` y, si la operación funciona, `data` con la lista actualizada. Si falla, devuelve `ok: false` y un mensaje en `error`.
+
+Respuesta correcta de gestión:
 
 ```json
-[
-  {
-    "id": 1,
-    "title": "Título",
-    "artist": "Artista",
-    "src": "audio/cancion.mp3"
-  }
-]
+{
+  "ok": true,
+  "data": []
+}
 ```
 
-Si no hay una sesión válida, responde con HTTP 401 y JSON de error:
+Respuesta de error:
 
 ```json
-{"error": "No autenticado"}
+{
+  "ok": false,
+  "error": "Debes iniciar sesión."
+}
 ```
 
-No se debe envolver la respuesta correcta en `ok` o `data`: cambiarla rompería
-el reproductor.
+Los comentarios explicativos no forman parte del JSON transmitido. Una respuesta JSON real no contiene comentarios ni HTML.
 
-### `api/catalogo.php`
+## Contrato de operaciones
 
-Es la API de gestión que utilizará el CRUD AJAX. Las operaciones correctas
-responden con un objeto que contiene `ok: true` y la lista actualizada en `data`:
+| Acción | Método y URL | Cuerpo | Respuesta correcta |
+|---|---|---|---|
+| Consultar | `GET api/catalogo.php?action=list` | Ninguno | 200 y lista en `data` |
+| Crear | `POST api/catalogo.php?action=create` | Los cinco campos de canción | 201 y lista actualizada |
+| Editar | `POST api/catalogo.php?action=update` | `id` y los cinco campos | 200 y lista actualizada |
+| Eliminar | `POST api/catalogo.php?action=delete` | `id` | 200 y lista actualizada |
 
-```json
-{"ok": true, "data": []}
-```
+Ninguna petición GET puede crear, editar ni eliminar canciones.
 
-Si la petición no está autorizada o una operación falla, responde con un objeto
-`ok: false` y un mensaje en `error`, además del estado HTTP apropiado:
+## Respuestas de error acordadas
 
-```json
-{"ok": false, "error": "Debes iniciar sesión."}
-```
+| Estado | Significado |
+|---:|---|
+| 400 | JSON mal escrito o acción desconocida |
+| 401 | Falta una sesión válida |
+| 403 | Token CSRF ausente o incorrecto |
+| 404 | La canción no existe |
+| 405 | Método no permitido; incluir `Allow` |
+| 415 | El cuerpo no se envía como `application/json` |
+| 422 | Campos con valores no válidos |
+| 500 | No se puede leer o guardar el catálogo |
 
-La respuesta de error no incluye una lista nueva. Los métodos y los campos de
-cada operación de gestión se concretarán al implementar el CRUD AJAX.
+## Decisiones de implementación
 
-## Acceso de páginas y APIs
+Preparar una función común de respuesta que establezca el estado HTTP, la cabecera `Content-Type: application/json; charset=utf-8`, codifique con `json_encode()` y termine la ejecución.
 
-La página privada está pensada para navegarse desde el navegador: si falta la
-sesión, puede redirigir a `login.php` con HTTP 303. Una API se consume como datos,
-por lo que debe informar el acceso denegado con un estado HTTP de error y JSON,
-sin redirigir ni devolver el HTML del formulario de login. Ambas superficies
-deben comprobar la sesión; cambia el formato de la respuesta para que cada
-cliente pueda gestionarla correctamente.
+No imprimir espacios, avisos PHP, `var_dump()` ni HTML antes del JSON. Los detalles técnicos se registran en los logs, pero no se devuelven rutas privadas ni contraseñas al navegador.
 
-Si `fetch` recibe HTML de login y el código intenta ejecutar
-`response.json()`, el análisis JSON falla: HTML no es JSON. Por eso la API debe
-devolver JSON también en los errores y el JavaScript debe comprobar el estado de
-la respuesta y el campo `ok`.
+Las dos APIs leen el mismo catálogo mediante las funciones compartidas. No se crean dos copias de los datos.
+
+## Comprobaciones
+
+Explicar qué respuesta corresponde a consultar sin sesión (401), editar un id inexistente (404) y enviar una duración negativa (422). Si la API devolviera una página HTML de login, `response.json()` no podría interpretar correctamente el cuerpo.
