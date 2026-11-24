@@ -60,3 +60,6 @@ Una caída de red no demuestra que el servidor no haya guardado. Si se pierde la
 - Token incorrecto: HTTP 403.
 - Cuerpo JSON mal formado: HTTP 400.
 
+![A1](/imagenes/11.png)\
+![A1](/imagenes/1.png)\
+![A1](/imagenes/60.png)\

@@ -71,3 +71,10 @@ El área de mensajes debe estar fuera del `tbody` y puede utilizar `role="status
 - Una lista vacía presenta el mensaje correspondiente.
 - Los títulos con caracteres HTML se muestran como texto.
 
+![A1](/imagenes/4.png)\
+![A1](/imagenes/3.png)\
+![A1](/imagenes/5.png)\
+![A1](/imagenes/6.png)\
+![A1](/imagenes/7.png)\
+![A1](/imagenes/8.png)\
+![A1](/imagenes/9.png)\
